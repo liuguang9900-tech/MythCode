@@ -489,12 +489,18 @@ async def run_repl(agent: AgentLoop, session, callbacks: AgentCallbacks, resume_
             continue
 
         # 处理内置命令
+        # 注意：仅当 / 后第一个 token 不含 / 时才视为斜杠命令，
+        # 避免把 "/Users/luogang/..." 这类文件路径误判为命令
         if user_input.startswith("/"):
-            handled = await dispatch_command(user_input, agent)
-            if handled == "exit":
-                await agent.notify_session_end()
-                break
-            continue
+            first_token = user_input.split(maxsplit=1)[0]
+            cmd_name = first_token.lower().lstrip("/")
+            if "/" not in cmd_name:
+                handled = await dispatch_command(user_input, agent)
+                if handled == "exit":
+                    await agent.notify_session_end()
+                    break
+                continue
+            # cmd_name 含 /：是文件路径，作为普通输入交给 agent
 
         try:
             response = await agent.run(user_input)

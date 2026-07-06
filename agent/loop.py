@@ -126,15 +126,20 @@ class AgentLoop:
         self.skills = SkillManager(workspace_root)
         self.skills.load_all()
         self.context.set_skills(self.skills)
+        # 注入到 skill_ops 工具（供 read_skill/list_skills 工具调用）
+        from tools.skill_ops import set_skills_manager
+        set_skills_manager(self.skills)
 
         # TODO 任务管理
         self.todo = TodoManager()
         set_todo_manager(self.todo)
         self.context.set_todo(self.todo)
 
-        # 子代理：注入父 Agent 引用
-        from tools.task_ops import set_parent_agent
-        set_parent_agent(self)
+        # 子代理：注入父 Agent 引用（task_ops 和 team_ops 共享）
+        from tools.task_ops import set_parent_agent as set_parent_for_task
+        set_parent_for_task(self)
+        from tools.team_ops import set_parent_agent as set_parent_for_team
+        set_parent_for_team(self)
 
         # 安全模式：禁用 CLAUDE.md、hooks、skills、auto-memory
         if self.safe_mode:
@@ -164,6 +169,12 @@ class AgentLoop:
         # 注册到全局，供 ui/console.py 使用
         from ui.console import set_style_manager
         set_style_manager(self.output_style_manager)
+
+        # 独立 AbortController：每个工具调用有独立的取消信号
+        # tool_call_id -> asyncio.Event（set 表示请求取消）
+        self._tool_abort_events: dict[str, asyncio.Event] = {}
+        # tool_call_id -> asyncio.Task（用于按 ID 取消特定工具）
+        self._tool_tasks: dict[str, asyncio.Task] = {}
 
     async def initialize(self) -> None:
         """异步初始化（启动 MCP 等需要异步的组件）"""
@@ -210,15 +221,62 @@ class AgentLoop:
             pass
 
     def cancel_current(self) -> None:
-        """取消当前正在执行的 LLM 请求"""
+        """取消当前正在执行的 LLM 请求及所有进行中的工具调用"""
         self._cancelled = True
+        # 取消所有进行中的工具任务
+        for tc_id, task in list(self._tool_tasks.items()):
+            if not task.done():
+                # 先设置取消信号，再 cancel task
+                event = self._tool_abort_events.get(tc_id)
+                if event:
+                    event.set()
+                task.cancel()
         if self._current_task and not self._current_task.done():
             self._current_task.cancel()
+
+    def cancel_tool(self, tool_call_id: str) -> bool:
+        """
+        独立 AbortController：取消特定工具调用。
+        支持在工具执行过程中按 Esc 取消单个工具，不影响其他工具和整体任务。
+
+        Args:
+            tool_call_id: 工具调用 ID（来自 LLM 返回的 tool_call["id"]）
+
+        Returns:
+            是否成功发出取消信号
+        """
+        event = self._tool_abort_events.get(tool_call_id)
+        if event is None:
+            return False
+        event.set()
+        task = self._tool_tasks.get(tool_call_id)
+        if task and not task.done():
+            task.cancel()
+        return True
+
+    def _register_tool_execution(self, tool_call_id: str) -> asyncio.Event:
+        """为工具调用注册独立的取消信号，返回 Event 供工具执行检查"""
+        event = asyncio.Event()
+        self._tool_abort_events[tool_call_id] = event
+        return event
+
+    def _unregister_tool_execution(self, tool_call_id: str) -> None:
+        """工具执行完成后清理注册"""
+        self._tool_abort_events.pop(tool_call_id, None)
+        self._tool_tasks.pop(tool_call_id, None)
+
+    def _is_tool_cancelled(self, tool_call_id: str) -> bool:
+        """检查工具是否被请求取消"""
+        event = self._tool_abort_events.get(tool_call_id)
+        return event is not None and event.is_set()
 
     def _reset_cancelled(self) -> None:
         """重置取消标志（新请求开始前调用）"""
         self._cancelled = False
         self._current_task = None
+        # 清理可能残留的工具取消状态
+        self._tool_abort_events.clear()
+        self._tool_tasks.clear()
 
     async def run(self, user_input: str) -> str:
         """
@@ -606,6 +664,10 @@ class AgentLoop:
         if tool is None:
             return ToolResult(success=False, output="", error=f"未知工具: {func_name}")
 
+        # 独立 AbortController：注册取消信号
+        tool_call_id = tool_call.get("id", "")
+        abort_event = self._register_tool_execution(tool_call_id) if tool_call_id else None
+
         # 记录工具调用（加锁保护共享状态）
         async with self._state_lock:
             self._current_tool_calls.append(func_name)
@@ -630,13 +692,32 @@ class AgentLoop:
                 if sid:
                     self._current_snapshot_ids.append(sid)
 
-        # 执行工具
+        # 执行工具（包装为可独立取消的 Task）
+        result = None
         try:
-            result = await tool.execute(**func_args)
+            # 检查取消信号
+            if abort_event and abort_event.is_set():
+                result = ToolResult(success=False, output="", error="工具被取消")
+            else:
+                # 创建独立 Task 执行工具，便于按 ID 取消
+                tool_task = asyncio.create_task(tool.execute(**func_args))
+                if tool_call_id:
+                    self._tool_tasks[tool_call_id] = tool_task
+                # 等待工具完成或被取消
+                result = await tool_task
+
+        except asyncio.CancelledError:
+            # 独立取消：仅此工具被取消，不影响整体任务
+            self._debug.log("agent", f"工具 {func_name} (id={tool_call_id}) 被独立取消")
+            result = ToolResult(success=False, output="", error="工具被用户取消")
         except Exception as e:
             result = ToolResult(
                 success=False, output="", error=f"工具执行异常: {e}"
             )
+        finally:
+            # 清理注册
+            if tool_call_id:
+                self._unregister_tool_execution(tool_call_id)
 
         # 记录修改的文件（加锁）
         if result.success and func_name in ("write_file", "edit_file"):
@@ -757,13 +838,34 @@ class AgentLoop:
                             success=False, output="", error="用户拒绝了命令执行"
                         )
 
-        # 执行工具
+        # 执行工具（独立 AbortController：包装为可按 ID 取消的 Task）
+        tool_call_id = tool_call.get("id", "")
+        abort_event = self._register_tool_execution(tool_call_id) if tool_call_id else None
+
+        result = None
         try:
-            result = await tool.execute(**func_args)
+            # 检查取消信号（权限确认期间可能已被取消）
+            if abort_event and abort_event.is_set():
+                result = ToolResult(success=False, output="", error="工具被取消")
+            else:
+                # 创建独立 Task 执行工具，便于按 ID 取消
+                tool_task = asyncio.create_task(tool.execute(**func_args))
+                if tool_call_id:
+                    self._tool_tasks[tool_call_id] = tool_task
+                result = await tool_task
+
+        except asyncio.CancelledError:
+            # 独立取消：仅此工具被取消，不影响整体任务
+            self._debug.log("agent", f"工具 {func_name} (id={tool_call_id}) 被独立取消")
+            result = ToolResult(success=False, output="", error="工具被用户取消")
         except Exception as e:
             result = ToolResult(
                 success=False, output="", error=f"工具执行异常: {e}"
             )
+        finally:
+            # 清理注册
+            if tool_call_id:
+                self._unregister_tool_execution(tool_call_id)
 
         # 记录修改的文件
         if result.success and func_name in ("write_file", "edit_file"):

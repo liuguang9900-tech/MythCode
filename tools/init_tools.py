@@ -11,6 +11,8 @@ from tools.search_ops import SearchCodeTool
 from tools.glob_ops import GlobTool
 from tools.todo_ops import TodoWriteTool
 from tools.task_ops import TaskTool
+from tools.skill_ops import ReadSkillTool, ListSkillsTool
+from tools.team_ops import TaskTeamTool
 from tools.web_ops import WebFetchTool, WebSearchTool
 
 
@@ -25,6 +27,11 @@ def register_all_tools() -> None:
     registry.register(GlobTool())
     registry.register(TodoWriteTool())
     registry.register(TaskTool())
+    # Skill 渐进式披露工具
+    registry.register(ReadSkillTool())
+    registry.register(ListSkillsTool())
+    # Agent Teams 多代理协作工具
+    registry.register(TaskTeamTool())
     # Web 工具（可选，依赖 httpx）
     try:
         registry.register(WebFetchTool())

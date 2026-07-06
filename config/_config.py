@@ -48,6 +48,9 @@ class AgentConfig(BaseModel):
     max_parallel_tools: int = Field(default=5, ge=1, le=20)
     max_tool_result_tokens: int = Field(default=2000, ge=100)     # 4000→2000：减少工具结果占用
     preserve_important_messages: bool = True
+    # 嵌套压缩：累积摘要超过阈值时对摘要本身再压缩
+    max_summary_tokens: int = Field(default=800, ge=100)
+    max_compress_iterations: int = Field(default=3, ge=1, le=10)
 
 
 class SafetyConfig(BaseModel):

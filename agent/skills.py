@@ -146,15 +146,74 @@ class SkillManager:
         return activated
 
     def get_context_for_prompt(self) -> str:
-        """获取激活技能的上下文用于注入 system prompt"""
+        """获取激活技能的上下文用于注入 system prompt（完整内容，仅用于 auto_activate 的技能）"""
         active = self.get_active_skills()
         if not active:
             return ""
 
-        lines = ["## 激活的技能 (Skills)", ""]
-        for skill in active:
+        # 仅 auto_activate 的技能注入完整内容，其余通过 read_skill 工具按需加载
+        full_skills = [s for s in active if s.auto_activate]
+        if not full_skills:
+            return ""
+
+        lines = ["## 自动激活的技能 (Skills - 完整内容)", ""]
+        for skill in full_skills:
             lines.append(f"### {skill.name}")
             lines.append(skill.content)
             lines.append("")
 
         return "\n".join(lines)
+
+    def get_summary_for_prompt(self) -> str:
+        """
+        渐进式披露：仅注入所有可用技能的 name + description（约 100 tokens/个）。
+        完整内容通过 read_skill 工具按需加载，避免 token 浪费。
+        """
+        all_skills = self.load_all()
+        if not all_skills:
+            return ""
+
+        lines = ["## 可用技能 (Skills - 渐进式披露)", ""]
+        lines.append("以下技能可用，需要时调用 `read_skill` 工具加载完整内容：")
+        lines.append("")
+        for skill in all_skills:
+            desc = skill.description or "(无描述)"
+            # 限制描述长度，避免过长
+            if len(desc) > 200:
+                desc = desc[:200] + "..."
+            auto_tag = " [自动激活]" if skill.auto_activate else ""
+            lines.append(f"- **{skill.name}**{auto_tag}: {desc}")
+        lines.append("")
+
+        # auto_activate 的技能附加完整内容
+        auto_skills = [s for s in all_skills if s.auto_activate]
+        if auto_skills:
+            lines.append("## 自动激活技能的完整内容")
+            lines.append("")
+            for skill in auto_skills:
+                lines.append(f"### {skill.name}")
+                lines.append(skill.content)
+                lines.append("")
+
+        return "\n".join(lines)
+
+    def get_skill_content(self, name: str) -> Optional[str]:
+        """按需获取技能完整内容（供 read_skill 工具调用）"""
+        skill = self.get_skill(name)
+        if skill is None:
+            return None
+        return skill.content
+
+    def list_available_skills(self) -> list[dict]:
+        """列出所有可用技能的摘要信息（供工具调用返回）"""
+        all_skills = self.load_all()
+        return [
+            {
+                "name": s.name,
+                "description": s.description,
+                "auto_activate": s.auto_activate,
+                "tags": s.tags,
+                "paths": s.paths,
+            }
+            for s in all_skills
+        ]

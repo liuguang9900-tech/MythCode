@@ -164,9 +164,9 @@ class ContextManager:
             if todo_context:
                 prompt += f"\n\n{todo_context}"
 
-        # 追加激活的技能
+        # 追加技能：使用渐进式披露（仅 name+description），auto_activate 的技能附加完整内容
         if self._skills_mgr:
-            skills_context = self._skills_mgr.get_context_for_prompt()
+            skills_context = self._skills_mgr.get_summary_for_prompt()
             if skills_context:
                 prompt += f"\n\n{skills_context}"
 

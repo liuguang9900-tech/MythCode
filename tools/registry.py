@@ -21,6 +21,7 @@ CORE_TOOLS = {
 EXTENDED_TOOLS = {
     "todo_write", "task", "web_fetch", "web_search",
     "notebook_edit", "read_image",
+    "read_skill", "list_skills", "task_team",
 }
 
 

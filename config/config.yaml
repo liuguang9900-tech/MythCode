@@ -24,6 +24,8 @@ agent:
   workspace_summary_max_items: 30   # 工作区目录树最大项数
   max_tool_result_tokens: 2000      # 单个工具结果最大 token 数（超过则截断）
   preserve_important_messages: true # 压缩时保留重要消息
+  max_summary_tokens: 800           # 嵌套压缩：累积摘要超过此 token 数时对摘要再压缩
+  max_compress_iterations: 3        # 嵌套压缩最大迭代次数，避免无限压缩
 
 # --- 安全策略 ---
 safety:

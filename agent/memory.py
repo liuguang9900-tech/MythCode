@@ -20,6 +20,9 @@ class ConversationMemory:
         self.summary_threshold = cfg.agent.summary_threshold
         self.max_tool_result_tokens = getattr(cfg.agent, "max_tool_result_tokens", 4000)
         self.preserve_important = getattr(cfg.agent, "preserve_important_messages", True)
+        # 嵌套压缩：当累积摘要本身超过此 token 阈值时，对摘要再压缩
+        self.max_summary_tokens = getattr(cfg.agent, "max_summary_tokens", 800)
+        self.max_compress_iterations = getattr(cfg.agent, "max_compress_iterations", 3)
         self.token_counter = get_token_counter(model_name)
 
         self.messages: list[dict] = []       # 完整消息列表
@@ -223,15 +226,61 @@ class ConversationMemory:
                     self.summary = self.summary + "\n" + summary
                 else:
                     self.summary = summary
+
+                # 嵌套压缩：当累积摘要本身过大时，对摘要再压缩
+                nested = await self._compress_summary_if_needed(llm_client)
+
                 return {
                     "tokens_saved": self.token_counter.count_messages(to_compress),
                     "old_message_count": old_count,
                     "new_message_count": len(self.messages),
+                    "summary_compressed": nested,
                 }
         except Exception:
             pass
 
         return None
+
+    async def _compress_summary_if_needed(self, llm_client) -> Optional[dict]:
+        """
+        嵌套压缩：当累积摘要本身超过 max_summary_tokens 时，对摘要再压缩。
+        支持多次迭代压缩，直到摘要低于阈值或达到最大迭代次数。
+        """
+        if not self.summary:
+            return None
+
+        iterations = 0
+        last_result = None
+        while iterations < self.max_compress_iterations:
+            summary_tokens = self.token_counter.count(self.summary)
+            if summary_tokens <= self.max_summary_tokens:
+                break
+            iterations += 1
+
+            try:
+                compressed = await llm_client.chat_simple(
+                    system="你是一个对话摘要助手。请将已有的对话摘要进一步浓缩，保留最关键的信息（用户核心请求、重要结论、关键决策），删除冗余细节。",
+                    user=f"请将以下摘要压缩到更短（目标 {self.max_summary_tokens} tokens 以内）：\n\n{self.summary}",
+                    max_tokens=self.max_summary_tokens,
+                )
+            except Exception:
+                break
+
+            if not compressed or len(compressed) >= len(self.summary):
+                # 压缩无效果，停止
+                break
+
+            old_tokens = summary_tokens
+            self.summary = compressed
+            new_tokens = self.token_counter.count(self.summary)
+            last_result = {
+                "iteration": iterations,
+                "old_tokens": old_tokens,
+                "new_tokens": new_tokens,
+                "tokens_saved": old_tokens - new_tokens,
+            }
+
+        return last_result
 
     def _get_compressible_indices(self, end_exclusive: int) -> list[int]:
         """获取可压缩的消息索引列表（排除重要消息）"""

@@ -1,0 +1,69 @@
+# ============================================================
+# MythCoder systemd service 模板
+# 用途：将 MythCoder 作为系统服务运行（如 stream-json 模式提供 API）
+#
+# 安装方式：
+#   sudo cp deploy/systemd/mythcoder.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable mythcoder
+#   sudo systemctl start mythcoder
+#
+# 查看日志：
+#   journalctl -u mythcoder -f
+# ============================================================
+
+[Unit]
+Description=MythCoder AI Coding Agent
+Documentation=https://github.com/MythCoder/MythCoder
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mythcoder
+Group=mythcoder
+
+# 工作目录
+WorkingDirectory=/opt/mythcoder/workspace
+
+# 环境变量
+EnvironmentFile=/opt/mythcoder/.env
+Environment=MYTHCODER_LOG_LEVEL=INFO
+Environment=MYTHCODER_LOG_FORMAT=json
+
+# 启动命令（stream-json 模式提供 API 服务）
+ExecStart=/opt/mythcoder/venv/bin/MythCoder -p -x "等待指令" --output-format stream-json
+
+# 重启策略
+Restart=always
+RestartSec=5
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+# 资源限制
+LimitNOFILE=65536
+MemoryMax=2G
+CPUQuota=200%
+
+# 安全沙箱
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/mythcoder/workspace /home/mythcoder/.mythcoder
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+# 标准输出/错误
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mythcoder
+
+[Install]
+WantedBy=multi-user.target

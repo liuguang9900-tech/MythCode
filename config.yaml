@@ -1,0 +1,101 @@
+# ============================================================
+# MythCoder 默认配置文件
+# 可通过命令行参数 --config 指定自定义路径
+# ============================================================
+
+# --- 大模型配置 ---
+model:
+  provider: "openai"                # DeepSeek 兼容 OpenAI 格式，使用 openai provider
+  name: "deepseek-v4-pro"           # 模型名称
+  api_key: "${MYTHCODER_API_KEY}"        # 从环境变量读取，避免硬编码泄露
+  api_base: "https://api.deepseek.com/v1"  # DeepSeek API 地址（需带 /v1）
+  temperature: 0.2                  # 生成温度 (0-2)，代码任务建议低温度
+  max_tokens: 8192                  # 单次响应最大 Token 数
+  timeout: 120                      # 请求超时（秒）
+
+# --- Agent 核心参数 ---
+agent:
+  max_iterations: 30                # ReAct 循环最大迭代次数，防止死循环
+  context_window: 128000            # 上下文窗口大小（Token 数）
+  history_max_turns: 20             # 保留的最大对话轮数（降低以减少 token 消耗）
+  summary_threshold: 0.7            # 当上下文占用超过此比例时触发摘要压缩（降低以更早压缩）
+  workspace_summary: true           # 是否在系统 Prompt 中注入工作区文件树摘要
+  workspace_summary_depth: 1        # 工作区目录树深度（1=仅顶层）
+  workspace_summary_max_items: 30   # 工作区目录树最大项数
+  max_tool_result_tokens: 2000      # 单个工具结果最大 token 数（超过则截断）
+  preserve_important_messages: true # 压缩时保留重要消息
+
+# --- 安全策略 ---
+safety:
+  project_root: "."                 # 工作区根目录（默认当前目录）
+  require_approval: true            # 高风险操作是否需要用户确认
+  # 需要确认的危险命令模式（正则）
+  dangerous_commands:
+    - "rm\\s+(-rf?\\s+)?/"
+    - "sudo\\s+rm"
+    - "chmod\\s+777"
+    - "dd\\s+if="
+    - "mkfs\\."
+    - ":(){ :|:& };:"
+    - ">\\s*/dev/sd[a-z]"
+    - "git\\s+push\\s+--force"
+    - "git\\s+reset\\s+--hard"
+    - "shutdown|reboot|halt|poweroff"
+  # 禁止修改的敏感路径模式
+  protected_paths:
+    - "~/.ssh"
+    - "~/.aws"
+    - "~/.gcloud"
+    - "/etc/passwd"
+    - "/etc/shadow"
+    - "/etc/sudoers"
+  # 允许的命令白名单（始终允许，无需确认）
+  allowed_commands:
+    - "ls"
+    - "cat"
+    - "head"
+    - "tail"
+    - "find"
+    - "grep"
+    - "rg"
+    - "mkdir"
+    - "git\\s+status"
+    - "git\\s+diff"
+    - "git\\s+log"
+    - "python"
+    - "pytest"
+    - "npm\\s+(test|run)"
+    - "cargo\\s+(build|test|check|run)"
+    - "go\\s+(build|test|run|vet)"
+
+# --- 工具配置 ---
+tools:
+  # 文件操作
+  file_max_size_mb: 10              # 读取文件的最大大小（MB）
+  file_encoding: "utf-8"            # 默认文件编码
+  # 命令执行
+  command_timeout: 120              # 命令执行超时（秒）
+  command_max_output: 100000        # 命令输出最大字符数
+  # 代码搜索
+  search_max_results: 50            # 搜索结果最大条数
+  search_respect_gitignore: true    # 是否遵循 .gitignore
+
+# --- 时空回溯配置 ---
+time_travel:
+  enabled: true                    # 是否启用时空回溯
+  max_snapshots: 100               # 最大快照数量（超出后清理最旧的）
+  snapshot_dir: ".agent_snapshots" # 快照存储目录名
+  auto_snapshot: true              # 写操作前是否自动快照
+
+# --- 对话持久化配置 ---
+persistence:
+  persist_conversation: true        # 退出时保存对话历史，启动时自动恢复
+  storage_dir: ".mythcoder"         # 存储目录名（相对于工作区根目录）
+
+# --- UI 配置 ---
+ui:
+  theme: "dark"                     # 主题: dark / light
+  show_tool_calls: true             # 是否显示工具调用详情
+  show_thinking: false              # 是否显示 LLM 思考过程
+  syntax_theme: "monokai"           # 代码高亮主题
+  max_output_lines: 500             # 单次输出最大行数（超出截断）

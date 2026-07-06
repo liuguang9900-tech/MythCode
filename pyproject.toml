@@ -1,0 +1,225 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mythcoder"
+version = "0.1.0"
+description = "本地自主 AI 编程智能体 (CLI Agent)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "MythCoder Team"}
+]
+keywords = ["ai", "agent", "cli", "coding", "llm", "assistant"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "litellm>=1.40.0,<2.0.0",
+    "openai>=1.30.0,<3.0.0",
+    "tiktoken>=0.7.0,<1.0.0",
+    "rich>=13.7.0,<14.0.0",
+    "prompt-toolkit>=3.0.43,<4.0.0",
+    "pygments>=2.17.0,<3.0.0",
+    "pyyaml>=6.0,<7.0",
+    "pydantic>=2.5.0,<3.0.0",
+    "pathspec>=0.12.0,<1.0.0",
+    "colorama>=0.4.6,<1.0.0",
+]
+
+[project.optional-dependencies]
+# Web 工具：网页抓取与搜索
+web = [
+    "httpx>=0.27.0,<1.0.0",
+    "beautifulsoup4>=4.12.0,<5.0.0",
+    "lxml>=5.0.0,<6.0.0",
+]
+# Notebook 支持
+notebook = [
+    "nbformat>=5.9.0,<6.0.0",
+]
+# 文件监听（配置热重载）
+watch = [
+    "watchdog>=4.0.0,<5.0.0",
+]
+# MCP 协议支持（SSE 传输）
+mcp = [
+    "httpx>=0.27.0,<1.0.0",
+]
+# Dashboard 可视化（Token 用量面板）
+dashboard = [
+    "fastapi>=0.110.0,<1.0.0",
+    "uvicorn[standard]>=0.27.0,<1.0.0",
+    "python-multipart>=0.0.9,<1.0.0",
+]
+# 全部可选功能
+all = [
+    "httpx>=0.27.0,<1.0.0",
+    "beautifulsoup4>=4.12.0,<5.0.0",
+    "lxml>=5.0.0,<6.0.0",
+    "nbformat>=5.9.0,<6.0.0",
+    "watchdog>=4.0.0,<5.0.0",
+    "fastapi>=0.110.0,<1.0.0",
+    "uvicorn[standard]>=0.27.0,<1.0.0",
+    "python-multipart>=0.0.9,<1.0.0",
+]
+# 开发依赖
+dev = [
+    "pytest>=7.0,<9.0",
+    "pytest-asyncio>=0.21,<1.0",
+    "pytest-cov>=4.0,<6.0",
+    "build>=1.0.0,<2.0.0",
+    "twine>=5.0.0,<6.0.0",
+    "ruff>=0.6.0,<1.0.0",
+    "mypy>=1.10.0,<2.0.0",
+    "black>=24.0.0,<25.0.0",
+    "isort>=5.13.0,<6.0.0",
+    "pre-commit>=3.7.0,<4.0.0",
+    "bandit>=1.7.0,<2.0.0",
+    "pip-audit>=2.7.0,<3.0.0",
+]
+
+[project.scripts]
+MythCoder = "app:main"
+MythCoder-dashboard = "dashboard.server:main"
+
+[project.urls]
+Homepage = "https://github.com/MythCoder/MythCoder"
+Repository = "https://github.com/MythCoder/MythCoder"
+Issues = "https://github.com/MythCoder/MythCoder/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "agent*",
+    "tools*",
+    "llm*",
+    "ui*",
+    "utils*",
+    "commands*",
+    "config*",
+    "mcp*",
+    "ide*",
+    "dashboard*",
+]
+
+[tool.setuptools]
+py-modules = ["app"]
+
+[tool.setuptools.package-data]
+config = ["config.yaml"]
+dashboard = ["static/*.html", "static/*.css", "static/*.js"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+# ============================================================
+# 代码质量工具配置
+# ============================================================
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["agent", "tools", "llm", "config", "commands", "mcp", "ide", "ui", "utils", "dashboard"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "UP",   # pyupgrade
+    "S",    # flake8-bandit (security)
+]
+ignore = [
+    "E501",   # line too long（由 black 处理）
+    "S101",   # use of assert（测试中需要）
+    "S603",   # subprocess call（已做安全处理）
+    "B008",   # function call in default argument
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "B"]
+"commands/custom.py" = ["S603", "S607"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agent", "tools", "llm", "config", "commands", "mcp", "ide", "ui", "utils", "dashboard"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.venv
+  | build
+  | dist
+  | __pycache__
+  | .*\.egg-info
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["agent", "tools", "llm", "config", "commands", "mcp", "ide", "ui", "utils"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["litellm.*", "tiktoken.*", "pathspec.*", "colorama.*"]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["agent", "tools", "llm", "config", "commands", "mcp", "ide", "ui", "utils", "dashboard"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.*/*",
+]
+
+[tool.coverage.report]
+fail_under = 60
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]

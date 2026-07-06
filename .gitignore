@@ -1,0 +1,64 @@
+# ============================================================
+# MythCoder .gitignore
+# ============================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 构建产物
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# 测试覆盖率
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.bandit/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 配置文件（含敏感信息）
+.env
+.env.local
+.env.*.local
+
+# 运行时数据
+.mythcoder/
+.agent_snapshots/
+*.log
+*.lock
+
+# 临时文件
+*.tmp
+*.bak
+*.orig
+
+# 文档构建
+site/
+docs/_build/
+
+# Docker
+docker-compose.override.yml

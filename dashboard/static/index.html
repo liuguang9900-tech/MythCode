@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MythCoder Dashboard - Token 用量可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #1a1b26;
+            --bg-secondary: #24283b;
+            --bg-card: #1f2335;
+            --bg-hover: #2d3148;
+            --text-primary: #c0caf5;
+            --text-secondary: #565f89;
+            --text-muted: #414868;
+            --accent-blue: #7aa2f7;
+            --accent-green: #9ece6a;
+            --accent-yellow: #e0af68;
+            --accent-red: #f7768e;
+            --accent-purple: #bb9af7;
+            --accent-cyan: #7dcfff;
+            --border-color: #2d3148;
+            --shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+        [data-theme="light"] {
+            --bg-primary: #f5f5f5;
+            --bg-secondary: #e8e8e8;
+            --bg-card: #ffffff;
+            --bg-hover: #f0f0f0;
+            --text-primary: #1a1b26;
+            --text-secondary: #6c7086;
+            --text-muted: #9aa5ce;
+            --border-color: #e0e0e0;
+            --shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+                         'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            transition: background 0.3s, color 0.3s;
+            line-height: 1.6;
+        }
+        /* 顶部导航 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+        }
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+        .header-title .logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1rem;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: rgba(158, 206, 106, 0.15);
+            border-radius: 12px;
+            font-size: 0.8rem;
+            color: var(--accent-green);
+        }
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+        }
+        .btn {
+            padding: 6px 14px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent-blue);
+        }
+        /* KPI 卡片区 */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            padding: 20px 24px;
+        }
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-color, var(--accent-blue));
+        }
+        .kpi-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow);
+        }
+        .kpi-label {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .kpi-value {
+            font-size: 1.85rem;
+            font-weight: 700;
+            color: var(--accent-color, var(--accent-blue));
+            line-height: 1.2;
+        }
+        .kpi-sub {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-top: 6px;
+        }
+        /* 图表区 */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+            padding: 0 24px 20px;
+        }
+        @media (max-width: 1024px) {
+            .chart-grid { grid-template-columns: 1fr; }
+        }
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .chart-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chart-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: var(--accent-blue);
+            border-radius: 2px;
+        }
+        .chart-container { width: 100%; height: 320px; }
+        /* 预算进度条 */
+        .budget-section { margin-bottom: 20px; }
+        .budget-row {
+            margin-bottom: 14px;
+        }
+        .budget-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 0.875rem;
+        }
+        .budget-label .label { color: var(--text-secondary); }
+        .budget-label .value { color: var(--text-primary); font-weight: 600; }
+        .progress-bar {
+            height: 10px;
+            background: var(--bg-secondary);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.6s ease;
+            background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));
+        }
+        .progress-fill.warning {
+            background: linear-gradient(90deg, var(--accent-yellow), var(--accent-red));
+        }
+        .progress-fill.danger {
+            background: var(--accent-red);
+        }
+        .warning-text {
+            color: var(--accent-red);
+            font-size: 0.8rem;
+            margin-top: 6px;
+            padding: 6px 10px;
+            background: rgba(247, 118, 142, 0.1);
+            border-radius: 4px;
+        }
+        /* 表格 */
+        .table-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            margin: 0 24px 20px;
+            overflow: hidden;
+        }
+        .table-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .table-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .table-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: var(--accent-purple);
+            border-radius: 2px;
+        }
+        .table-filters {
+            display: flex;
+            gap: 8px;
+        }
+        .filter-input {
+            padding: 4px 10px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.8rem;
+            outline: none;
+        }
+        .filter-input:focus { border-color: var(--accent-blue); }
+        table { width: 100%; border-collapse: collapse; }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+        }
+        tbody tr {
+            transition: background 0.15s;
+        }
+        tbody tr:hover { background: var(--bg-hover); }
+        td { font-size: 0.875rem; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-blue { background: rgba(122, 162, 247, 0.2); color: var(--accent-blue); }
+        .badge-green { background: rgba(158, 206, 106, 0.2); color: var(--accent-green); }
+        .badge-yellow { background: rgba(224, 175, 104, 0.2); color: var(--accent-yellow); }
+        .badge-purple { background: rgba(187, 154, 247, 0.2); color: var(--accent-purple); }
+        .badge-red { background: rgba(247, 118, 142, 0.2); color: var(--accent-red); }
+        .text-blue { color: var(--accent-blue); }
+        .text-green { color: var(--accent-green); }
+        .text-yellow { color: var(--accent-yellow); }
+        .text-red { color: var(--accent-red); }
+        .text-muted { color: var(--text-muted); }
+        .text-right { text-align: right; }
+        .text-mono { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; }
+        /* 分页 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+        .pagination button {
+            padding: 4px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .pagination button:hover:not(:disabled) {
+            border-color: var(--accent-blue);
+        }
+        .pagination .info {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+        /* 空状态 */
+        .empty-state {
+            padding: 40px 20px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+        .empty-state .icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+        /* 加载状态 */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* 会话展开行 */
+        .session-detail {
+            background: var(--bg-secondary);
+        }
+        .session-detail td {
+            padding: 0;
+        }
+        .session-detail-content {
+            padding: 12px 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .session-detail-content table {
+            margin: 0;
+        }
+        .session-detail-content th {
+            background: var(--bg-primary);
+            font-size: 0.7rem;
+        }
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-title">
+            <div class="logo">P</div>
+            <span>MythCoder Dashboard</span>
+        </div>
+        <div class="header-controls">
+            <span class="live-indicator">
+                <span class="live-dot"></span>
+                <span id="live-status">实时</span>
+            </span>
+            <button class="btn" id="theme-toggle">切换主题</button>
+            <button class="btn" id="refresh">刷新</button>
+        </div>
+    </header>
+
+    <!-- KPI 卡片区 -->
+    <section class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card" style="--accent-color: var(--accent-blue);">
+            <div class="kpi-label">总 Token</div>
+            <div class="kpi-value" id="kpi-total-tokens">-</div>
+            <div class="kpi-sub" id="kpi-total-sub">加载中...</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--accent-green);">
+            <div class="kpi-label">总费用</div>
+            <div class="kpi-value" id="kpi-total-cost">-</div>
+            <div class="kpi-sub" id="kpi-cost-sub">加载中...</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--accent-yellow);">
+            <div class="kpi-label">今日用量</div>
+            <div class="kpi-value" id="kpi-today-tokens">-</div>
+            <div class="kpi-sub" id="kpi-today-sub">加载中...</div>
+        </div>
+        <div class="kpi-card" style="--accent-color: var(--accent-purple);">
+            <div class="kpi-label">本月用量</div>
+            <div class="kpi-value" id="kpi-month-tokens">-</div>
+            <div class="kpi-sub" id="kpi-month-sub">加载中...</div>
+        </div>
+    </section>
+
+    <!-- 图表区 -->
+    <section class="chart-grid">
+        <div class="chart-card">
+            <div class="chart-title">每日用量趋势</div>
+            <div id="daily-chart" class="chart-container"></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-title">预算 & 模型分布</div>
+            <div class="budget-section" id="budget-section"></div>
+            <div id="model-chart" style="width: 100%; height: 200px;"></div>
+        </div>
+    </section>
+
+    <!-- 每次 LLM 调用统计 -->
+    <section class="table-container">
+        <div class="table-header">
+            <div class="table-title">每次 LLM 调用统计</div>
+            <div class="table-filters">
+                <select class="filter-input" id="calls-model-filter">
+                    <option value="">所有模型</option>
+                </select>
+                <input type="text" class="filter-input" id="calls-search" placeholder="搜索会话 ID...">
+            </div>
+        </div>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>模型</th>
+                        <th class="text-right">输入 Token</th>
+                        <th class="text-right">输出 Token</th>
+                        <th class="text-right">总计</th>
+                        <th class="text-right">费用</th>
+                        <th>会话</th>
+                    </tr>
+                </thead>
+                <tbody id="calls-tbody">
+                    <tr><td colspan="7" class="empty-state">
+                        <div class="icon">○</div>
+                        <div>加载中...</div>
+                    </td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="calls-pagination">
+            <button id="calls-prev" disabled>上一页</button>
+            <span class="info" id="calls-page-info">-</span>
+            <button id="calls-next" disabled>下一页</button>
+        </div>
+    </section>
+
+    <!-- 会话列表 -->
+    <section class="table-container">
+        <div class="table-header">
+            <div class="table-title">会话列表</div>
+        </div>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>会话 ID</th>
+                        <th>模型</th>
+                        <th class="text-right">调用数</th>
+                        <th class="text-right">总 Token</th>
+                        <th class="text-right">费用</th>
+                        <th>最后调用</th>
+                    </tr>
+                </thead>
+                <tbody id="sessions-tbody">
+                    <tr><td colspan="6" class="empty-state">
+                        <div class="icon">○</div>
+                        <div>加载中...</div>
+                    </td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        // ===== 全局状态 =====
+        let dailyChart = null, modelChart = null;
+        let eventSource = null;
+        let callsPage = { offset: 0, limit: 20, total: 0 };
+        let allModelStats = [];
+
+        // ===== 工具函数 =====
+        function formatNumber(n) {
+            if (n === null || n === undefined) return '-';
+            if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+            if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+            if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+            return n.toString();
+        }
+        function formatCost(c) {
+            if (c === null || c === undefined) return '-';
+            if (c < 0.01) return '$' + c.toFixed(6);
+            if (c < 1) return '$' + c.toFixed(4);
+            return '$' + c.toFixed(2);
+        }
+        function formatTime(iso) {
+            if (!iso) return '-';
+            try {
+                const d = new Date(iso);
+                return d.toLocaleString('zh-CN', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    hour12: false
+                });
+            } catch { return iso; }
+        }
+        function formatShortTime(iso) {
+            if (!iso) return '-';
+            try {
+                const d = new Date(iso);
+                return d.toLocaleString('zh-CN', {
+                    month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit',
+                    hour12: false
+                });
+            } catch { return iso; }
+        }
+        function escapeHtml(s) {
+            if (!s) return '';
+            return String(s).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        // ===== KPI 卡片渲染 =====
+        async function renderKPI() {
+            try {
+                const res = await fetch('/api/overview');
+                const data = await res.json();
+                document.getElementById('kpi-total-tokens').textContent = formatNumber(data.total.total_tokens);
+                document.getElementById('kpi-total-sub').textContent = `${data.call_count} 次调用 · ${data.session_count} 个会话`;
+                document.getElementById('kpi-total-cost').textContent = formatCost(data.total.cost);
+                const todayCost = formatCost(data.today.cost);
+                const yesterdayCost = formatCost(data.yesterday.cost);
+                document.getElementById('kpi-cost-sub').textContent = `今日 ${todayCost} · 昨日 ${yesterdayCost}`;
+                document.getElementById('kpi-today-tokens').textContent = formatNumber(data.today.total_tokens);
+                document.getElementById('kpi-today-sub').textContent = `费用 ${todayCost}`;
+                document.getElementById('kpi-month-tokens').textContent = formatNumber(data.this_month.total_tokens);
+                document.getElementById('kpi-month-sub').textContent = `费用 ${formatCost(data.this_month.cost)}`;
+            } catch (e) {
+                console.error('KPI 渲染失败:', e);
+            }
+        }
+
+        // ===== 每日趋势图 =====
+        async function renderDailyChart() {
+            try {
+                const res = await fetch('/api/daily?days=30');
+                const data = await res.json();
+                const dates = data.map(d => d.date);
+                const promptTokens = data.map(d => d.prompt_tokens);
+                const completionTokens = data.map(d => d.completion_tokens);
+                const costs = data.map(d => d.cost);
+
+                if (!dailyChart) dailyChart = echarts.init(document.getElementById('daily-chart'));
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                const textColor = isDark ? '#c0caf5' : '#1a1b26';
+                const mutedColor = isDark ? '#565f89' : '#6c7086';
+
+                dailyChart.setOption({
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: { type: 'cross' },
+                        backgroundColor: isDark ? '#1f2335' : '#fff',
+                        borderColor: isDark ? '#2d3148' : '#e0e0e0',
+                        textStyle: { color: textColor }
+                    },
+                    legend: {
+                        data: ['输入 Token', '输出 Token', '费用'],
+                        textStyle: { color: textColor },
+                        top: 0
+                    },
+                    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+                    xAxis: {
+                        type: 'category',
+                        data: dates,
+                        axisLabel: { color: mutedColor, fontSize: 11 },
+                        axisLine: { lineStyle: { color: mutedColor } }
+                    },
+                    yAxis: [
+                        {
+                            type: 'value',
+                            name: 'Token',
+                            nameTextStyle: { color: mutedColor },
+                            axisLabel: { color: mutedColor, formatter: v => formatNumber(v) },
+                            splitLine: { lineStyle: { color: isDark ? '#2d3148' : '#e0e0e0' } }
+                        },
+                        {
+                            type: 'value',
+                            name: '费用 ($)',
+                            nameTextStyle: { color: mutedColor },
+                            axisLabel: { color: mutedColor, formatter: v => '$' + v.toFixed(2) },
+                            splitLine: { show: false }
+                        }
+                    ],
+                    dataZoom: [
+                        { type: 'inside', start: 60 },
+                        { type: 'slider', start: 60, height: 20, bottom: 5 }
+                    ],
+                    series: [
+                        {
+                            name: '输入 Token',
+                            type: 'bar',
+                            stack: 'tokens',
+                            data: promptTokens,
+                            itemStyle: { color: '#7aa2f7', borderRadius: [2, 2, 0, 0] }
+                        },
+                        {
+                            name: '输出 Token',
+                            type: 'bar',
+                            stack: 'tokens',
+                            data: completionTokens,
+                            itemStyle: { color: '#9ece6a', borderRadius: [2, 2, 0, 0] }
+                        },
+                        {
+                            name: '费用',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            data: costs,
+                            itemStyle: { color: '#e0af68' },
+                            lineStyle: { width: 2 },
+                            symbol: 'circle',
+                            symbolSize: 6,
+                            smooth: true
+                        }
+                    ]
+                }, true);
+            } catch (e) {
+                console.error('每日图表渲染失败:', e);
+            }
+        }
+
+        // ===== 模型分布饼图 =====
+        async function renderModelChart() {
+            try {
+                const res = await fetch('/api/models');
+                allModelStats = await res.json();
+                const pieData = allModelStats.map(d => ({ name: d.model, value: d.total_tokens }));
+
+                if (!modelChart) modelChart = echarts.init(document.getElementById('model-chart'));
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                const textColor = isDark ? '#c0caf5' : '#1a1b26';
+
+                modelChart.setOption({
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: '{b}: {c} ({d}%)',
+                        backgroundColor: isDark ? '#1f2335' : '#fff',
+                        borderColor: isDark ? '#2d3148' : '#e0e0e0',
+                        textStyle: { color: textColor }
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        right: 5,
+                        top: 'center',
+                        textStyle: { color: textColor, fontSize: 11 }
+                    },
+                    series: [{
+                        type: 'pie',
+                        radius: ['35%', '65%'],
+                        center: ['35%', '50%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 6,
+                            borderColor: isDark ? '#1f2335' : '#fff',
+                            borderWidth: 2
+                        },
+                        label: { show: false },
+                        emphasis: {
+                            label: { show: true, fontSize: 14, fontWeight: 'bold', color: textColor }
+                        },
+                        data: pieData
+                    }],
+                    color: ['#7aa2f7', '#9ece6a', '#e0af68', '#f7768e', '#bb9af7', '#7dcfff']
+                }, true);
+
+                // 更新调用列表的模型筛选器
+                const filter = document.getElementById('calls-model-filter');
+                const currentValue = filter.value;
+                filter.innerHTML = '<option value="">所有模型</option>';
+                allModelStats.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.model;
+                    opt.textContent = `${m.model} (${formatNumber(m.total_tokens)})`;
+                    filter.appendChild(opt);
+                });
+                filter.value = currentValue;
+            } catch (e) {
+                console.error('模型图表渲染失败:', e);
+            }
+        }
+
+        // ===== 预算进度条 =====
+        async function renderBudget() {
+            try {
+                const res = await fetch('/api/budget');
+                const data = await res.json();
+                let html = '';
+
+                if (data.daily_budget > 0) {
+                    const pct = Math.min(data.daily_pct, 100);
+                    const cls = data.daily_pct >= 100 ? 'danger' : (data.daily_pct >= 80 ? 'warning' : '');
+                    html += `
+                        <div class="budget-row">
+                            <div class="budget-label">
+                                <span class="label">日预算</span>
+                                <span class="value">${formatCost(data.daily_used)} / ${formatCost(data.daily_budget)}</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill ${cls}" style="width: ${pct}%"></div>
+                            </div>
+                            <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px;">${data.daily_pct.toFixed(1)}%</div>
+                        </div>
+                    `;
+                }
+                if (data.monthly_budget > 0) {
+                    const pct = Math.min(data.monthly_pct, 100);
+                    const cls = data.monthly_pct >= 100 ? 'danger' : (data.monthly_pct >= 80 ? 'warning' : '');
+                    html += `
+                        <div class="budget-row">
+                            <div class="budget-label">
+                                <span class="label">月预算</span>
+                                <span class="value">${formatCost(data.monthly_used)} / ${formatCost(data.monthly_budget)}</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill ${cls}" style="width: ${pct}%"></div>
+                            </div>
+                            <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px;">${data.monthly_pct.toFixed(1)}%</div>
+                        </div>
+                    `;
+                }
+                if (data.daily_budget === 0 && data.monthly_budget === 0) {
+                    html = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 0;">未配置预算（在 config.yaml 中设置 cost.daily_budget / monthly_budget）</div>';
+                }
+                if (data.warnings && data.warnings.length > 0) {
+                    data.warnings.forEach(w => {
+                        html += `<div class="warning-text">⚠ ${escapeHtml(w)}</div>`;
+                    });
+                }
+                document.getElementById('budget-section').innerHTML = html;
+            } catch (e) {
+                console.error('预算渲染失败:', e);
+            }
+        }
+
+        // ===== 调用列表表格 =====
+        async function renderCalls() {
+            try {
+                const modelFilter = document.getElementById('calls-model-filter').value;
+                const search = document.getElementById('calls-search').value.trim();
+                let url = `/api/calls?limit=${callsPage.limit}&offset=${callsPage.offset}`;
+                if (search) url += `&session_id=${encodeURIComponent(search)}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                callsPage.total = data.total;
+
+                const tbody = document.getElementById('calls-tbody');
+                if (!data.calls || data.calls.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">
+                        <div class="icon">○</div>
+                        <div>暂无调用记录</div>
+                    </td></tr>`;
+                } else {
+                    tbody.innerHTML = data.calls
+                        .filter(c => !modelFilter || c.model === modelFilter)
+                        .map(c => `
+                            <tr>
+                                <td class="text-mono">${formatShortTime(c.timestamp)}</td>
+                                <td><span class="badge badge-blue">${escapeHtml(c.model)}</span></td>
+                                <td class="text-right text-mono text-blue">${formatNumber(c.prompt_tokens)}</td>
+                                <td class="text-right text-mono text-green">${formatNumber(c.completion_tokens)}</td>
+                                <td class="text-right text-mono">${formatNumber(c.total_tokens)}</td>
+                                <td class="text-right text-mono text-yellow">${formatCost(c.cost)}</td>
+                                <td><span class="badge badge-purple text-mono">${escapeHtml(c.session_id.slice(0, 12))}</span></td>
+                            </tr>
+                        `).join('');
+                }
+
+                // 更新分页
+                const start = callsPage.total === 0 ? 0 : callsPage.offset + 1;
+                const end = Math.min(callsPage.offset + callsPage.limit, callsPage.total);
+                document.getElementById('calls-page-info').textContent =
+                    `${start}-${end} / 共 ${callsPage.total} 条`;
+                document.getElementById('calls-prev').disabled = callsPage.offset === 0;
+                document.getElementById('calls-next').disabled = end >= callsPage.total;
+            } catch (e) {
+                console.error('调用列表渲染失败:', e);
+            }
+        }
+
+        // ===== 会话列表表格 =====
+        async function renderSessions() {
+            try {
+                const res = await fetch('/api/sessions?limit=50');
+                const data = await res.json();
+                const tbody = document.getElementById('sessions-tbody');
+
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">
+                        <div class="icon">○</div>
+                        <div>暂无会话记录</div>
+                    </td></tr>`;
+                } else {
+                    tbody.innerHTML = data.map(s => `
+                        <tr style="cursor:pointer;" onclick="toggleSession('${escapeHtml(s.session_id)}', this)">
+                            <td><span class="badge badge-purple text-mono">${escapeHtml(s.session_id.slice(0, 16))}</span></td>
+                            <td><span class="badge badge-blue">${escapeHtml(s.model)}</span></td>
+                            <td class="text-right text-mono">${s.call_count}</td>
+                            <td class="text-right text-mono">${formatNumber(s.total_tokens)}</td>
+                            <td class="text-right text-mono text-yellow">${formatCost(s.cost)}</td>
+                            <td class="text-mono">${formatShortTime(s.last_call_time)}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('会话列表渲染失败:', e);
+            }
+        }
+
+        // ===== 会话展开/收起 =====
+        async function toggleSession(sessionId, row) {
+            const next = row.nextElementSibling;
+            if (next && next.classList.contains('session-detail')) {
+                next.remove();
+                return;
+            }
+            try {
+                const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+                if (!res.ok) return;
+                const session = await res.json();
+                const calls = session.calls || [];
+
+                const detailRow = document.createElement('tr');
+                detailRow.className = 'session-detail';
+                detailRow.innerHTML = `<td colspan="6"><div class="session-detail-content">
+                    <table>
+                        <thead><tr>
+                            <th>时间</th><th>输入</th><th>输出</th><th>总计</th><th>费用</th>
+                        </tr></thead>
+                        <tbody>
+                            ${calls.slice().reverse().map(c => `
+                                <tr>
+                                    <td class="text-mono">${formatShortTime(c.timestamp)}</td>
+                                    <td class="text-right text-mono text-blue">${formatNumber(c.prompt_tokens)}</td>
+                                    <td class="text-right text-mono text-green">${formatNumber(c.completion_tokens)}</td>
+                                    <td class="text-right text-mono">${formatNumber(c.total_tokens)}</td>
+                                    <td class="text-right text-mono text-yellow">${formatCost(c.cost)}</td>
+                                </tr>
+                            `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">无调用记录</td></tr>'}
+                        </tbody>
+                    </table>
+                </div></td>`;
+                row.after(detailRow);
+            } catch (e) {
+                console.error('会话详情加载失败:', e);
+            }
+        }
+
+        // ===== SSE 实时推送 =====
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            try {
+                eventSource = new EventSource('/api/stream');
+                eventSource.onmessage = async (event) => {
+                    // 收到更新，重新渲染所有组件
+                    await Promise.all([
+                        renderKPI(),
+                        renderDailyChart(),
+                        renderModelChart(),
+                        renderBudget(),
+                        renderCalls(),
+                        renderSessions()
+                    ]);
+                };
+                eventSource.onerror = () => {
+                    document.getElementById('live-status').textContent = '已断开';
+                    eventSource.close();
+                    // 5 秒后重连
+                    setTimeout(() => {
+                        document.getElementById('live-status').textContent = '重连中';
+                        connectSSE();
+                    }, 5000);
+                };
+                document.getElementById('live-status').textContent = '实时';
+            } catch (e) {
+                console.error('SSE 连接失败:', e);
+            }
+        }
+
+        // ===== 主题切换 =====
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            // 重新渲染图表以应用新主题
+            if (dailyChart) { dailyChart.dispose(); dailyChart = null; }
+            if (modelChart) { modelChart.dispose(); modelChart = null; }
+            renderDailyChart();
+            renderModelChart();
+        }
+
+        // ===== 初始化 =====
+        async function init() {
+            await Promise.all([
+                renderKPI(),
+                renderDailyChart(),
+                renderModelChart(),
+                renderBudget(),
+                renderCalls(),
+                renderSessions()
+            ]);
+            connectSSE();
+
+            document.getElementById('theme-toggle').onclick = toggleTheme;
+            document.getElementById('refresh').onclick = () => {
+                Promise.all([
+                    renderKPI(), renderDailyChart(), renderModelChart(),
+                    renderBudget(), renderCalls(), renderSessions()
+                ]);
+            };
+            document.getElementById('calls-prev').onclick = () => {
+                if (callsPage.offset > 0) {
+                    callsPage.offset = Math.max(0, callsPage.offset - callsPage.limit);
+                    renderCalls();
+                }
+            };
+            document.getElementById('calls-next').onclick = () => {
+                if (callsPage.offset + callsPage.limit < callsPage.total) {
+                    callsPage.offset += callsPage.limit;
+                    renderCalls();
+                }
+            };
+            document.getElementById('calls-model-filter').onchange = renderCalls;
+            document.getElementById('calls-search').oninput = () => {
+                callsPage.offset = 0;
+                renderCalls();
+            };
+
+            window.addEventListener('resize', () => {
+                dailyChart && dailyChart.resize();
+                modelChart && modelChart.resize();
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>

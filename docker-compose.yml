@@ -1,0 +1,40 @@
+# Docker Compose — 本地开发与测试环境
+version: "3.9"
+
+services:
+  mythcoder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mythcoder:latest
+    container_name: mythcoder
+    volumes:
+      # 工作目录
+      - ./workspace:/workspace
+      # 配置持久化
+      - mythcoder_config:/home/mythcoder/.mythcoder
+      # 项目挂载（开发模式）
+      - .:/app:ro
+    environment:
+      - MYTHCODER_API_KEY=${MYTHCODER_API_KEY:-}
+      - MYTHCODER_LOG_LEVEL=${MYTHCODER_LOG_LEVEL:-INFO}
+      - MYTHCODER_LOG_FORMAT=${MYTHCODER_LOG_FORMAT:-json}
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # 可选：Ollama 本地模型服务
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mythcoder-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles: ["local-model"]
+    restart: unless-stopped
+
+volumes:
+  mythcoder_config:
+  ollama_data:

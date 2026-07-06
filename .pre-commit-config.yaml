@@ -1,0 +1,55 @@
+# Pre-commit hooks 配置
+# 安装：pip install pre-commit && pre-commit install
+repos:
+  # Ruff: lint + format
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # Black: 代码格式化
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        language_version: python3
+
+  # isort: import 排序
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black]
+
+  # mypy: 类型检查
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.2
+    hooks:
+      - id: mypy
+        additional_dependencies: [pydantic>=2.5.0]
+        args: [--ignore-missing-imports, --no-strict-optional]
+        exclude: ^(tests/|commands/)
+
+  # 基础检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: debug-statements
+      - id: requirements-txt-fixer
+
+  # Bandit: 安全扫描
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.9
+    hooks:
+      - id: bandit
+        args: [-l, --recursive, -x, tests]
+        exclude: ^tests/

@@ -106,7 +106,7 @@ class ConversationMemory:
         """
         将非最近一轮的工具结果替换为简短摘要。
         最近一轮（最后一个 assistant 消息之前的）工具结果保持完整。
-        早期工具结果只保留前 200 字符 + 字符数提示。
+        早期工具结果只保留前 100 字符 + 字符数提示。
         """
         if len(messages) < 6:
             return messages
@@ -118,20 +118,19 @@ class ConversationMemory:
                 last_assistant_idx = i
                 break
 
-        # 最近一轮的工具结果范围：last_assistant_idx 之前的最后一个 user 之后
-        # 简化：保留最后 6 条消息中的工具结果完整，更早的摘要化
-        recent_threshold = max(0, len(messages) - 6)
+        # 最近一轮的工具结果范围：保留最后 4 条消息中的工具结果完整，更早的摘要化
+        recent_threshold = max(0, len(messages) - 4)
 
         result = []
         for i, msg in enumerate(messages):
             if msg.get("role") == "tool" and i < recent_threshold:
                 content = msg.get("content", "")
                 # 已经是摘要的跳过
-                if content.startswith("[工具结果摘要]") or len(content) <= 200:
+                if content.startswith("[工具结果摘要]") or len(content) <= 100:
                     result.append(msg)
                 else:
-                    # 替换为摘要
-                    preview = content[:200].replace("\n", " ")
+                    # 替换为摘要（仅保留前 100 字符）
+                    preview = content[:100].replace("\n", " ")
                     char_count = len(content)
                     summarized = {
                         **msg,

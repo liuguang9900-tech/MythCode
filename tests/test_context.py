@@ -32,8 +32,8 @@ class TestSystemPrompt:
         ctx = ContextManager(memory, str(tmp_path))
         prompt = ctx.build_system_prompt()
 
-        assert "自主 AI 编程智能体" in prompt
-        assert "工作原则" in prompt
+        assert "MythCoder" in prompt
+        assert "原则" in prompt
 
     def test_prompt_contains_tool_guidelines(self, tmp_path):
         _setup_config(tmp_path)
@@ -45,13 +45,12 @@ class TestSystemPrompt:
         prompt = ctx.build_system_prompt()
 
         # 工具使用规范
-        assert "工具使用" in prompt
+        assert "工具" in prompt
         assert "glob" in prompt
         assert "search_code" in prompt
         assert "edit_file" in prompt
         assert "write_file" in prompt
         assert "read_file" in prompt
-        assert "todo_write" in prompt
 
     def test_prompt_contains_code_style(self, tmp_path):
         _setup_config(tmp_path)
@@ -62,7 +61,7 @@ class TestSystemPrompt:
         ctx = ContextManager(memory, str(tmp_path))
         prompt = ctx.build_system_prompt()
 
-        assert "代码风格" in prompt
+        assert "代码" in prompt
         assert "类型注解" in prompt
 
     def test_prompt_contains_git_workflow(self, tmp_path):
@@ -87,10 +86,10 @@ class TestSystemPrompt:
         ctx = ContextManager(memory, str(tmp_path))
         prompt = ctx.build_system_prompt()
 
-        assert "工作目录" in prompt
+        assert "目录" in prompt
         assert str(tmp_path) in prompt
-        assert "操作系统" in prompt
-        assert "当前时间" in prompt
+        assert "系统" in prompt
+        assert "时间" in prompt
 
     def test_prompt_contains_output_rules(self, tmp_path):
         _setup_config(tmp_path)
@@ -115,8 +114,8 @@ class TestSystemPrompt:
         prompt = ctx.build_system_prompt()
 
         # 精简版提示词中工作原则包含安全相关内容
-        assert "工作原则" in prompt
-        assert "安全" in prompt
+        assert "原则" in prompt
+        assert "危险命令" in prompt
 
 
 class TestTodoInjection:

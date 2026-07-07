@@ -78,9 +78,12 @@ class ReadFileTool(BaseTool):
 
         total_lines = len(lines)
 
-        # 处理行号范围
+        # 处理行号范围（未指定 limit 时默认最多读 500 行，避免大文件撑爆上下文）
         start = max(0, (offset or 1) - 1)
-        end = min(total_lines, start + limit) if limit else total_lines
+        if limit:
+            end = min(total_lines, start + limit)
+        else:
+            end = min(total_lines, start + 500)
 
         selected = lines[start:end]
 
@@ -92,6 +95,10 @@ class ReadFileTool(BaseTool):
         output = "\n".join(output_lines)
         if not output:
             output = "(文件为空)"
+
+        # 如果只读取了部分行，提示 LLM 还有更多内容
+        if end < total_lines:
+            output += f"\n\n(共 {total_lines} 行，已显示 {start + 1}-{end}，如需更多用 offset={end + 1} 继续读取)"
 
         return ToolResult(
             success=True,

@@ -76,6 +76,7 @@ class ListDirectoryTool(BaseTool):
         lines: list[str],
         prefix: str,
         current_depth: int = 0,
+        max_items: int = 100,
     ) -> None:
         if current_depth >= max_depth:
             return
@@ -92,8 +93,14 @@ class ListDirectoryTool(BaseTool):
             if not ignore_mgr.is_ignored(e) and not self._match_extra(e, extra_patterns)
         ]
 
+        # 限制输出条目数，避免大目录撑爆上下文
+        truncated = False
+        if len(entries) > max_items:
+            entries = entries[:max_items]
+            truncated = True
+
         for i, entry in enumerate(entries):
-            is_last = i == len(entries) - 1
+            is_last = (i == len(entries) - 1) and not truncated
             connector = "└── " if is_last else "├── "
             lines.append(f"{prefix}{connector}{entry.name}")
 
@@ -107,7 +114,11 @@ class ListDirectoryTool(BaseTool):
                     lines,
                     prefix + extension,
                     current_depth + 1,
+                    max_items,
                 )
+
+        if truncated:
+            lines.append(f"{prefix}└── ... (更多条目已省略)")
 
     @staticmethod
     def _match_extra(entry: Path, patterns: set[str]) -> bool:

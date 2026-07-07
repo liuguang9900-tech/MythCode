@@ -306,12 +306,35 @@ class AgentCallbacks:
         self.stream = stream_display
         self.no_approval = no_approval
         self.current_tool_name = ""
+        # 状态 spinner 管理（思考中/执行中/压缩中...）
+        self._status_ctx = None
 
     async def on_text_chunk(self, text: str):
         """LLM 文本增量 → 流式渲染"""
+        # 第一个文本块到达时，确保 spinner 已结束
+        if self._status_ctx is not None:
+            self._status_ctx.__exit__(None, None, None)
+            self._status_ctx = None
         if not self.stream.is_active:
             self.stream.start()
         self.stream.add_chunk(text)
+
+    async def on_status(self, action: str, message: str):
+        """状态变化 → 显示/隐藏 spinner（参考 Claude Code 的思考/执行指示器）"""
+        if action == "start":
+            # 结束流式输出（如果正在进行）
+            if self.stream.is_active:
+                self.stream.finish()
+            # 结束之前的 spinner（如有）
+            if self._status_ctx is not None:
+                self._status_ctx.__exit__(None, None, None)
+            # 启动新 spinner
+            from ui.console import status_spinner
+            self._status_ctx = status_spinner(message).__enter__()
+        elif action == "end":
+            if self._status_ctx is not None:
+                self._status_ctx.__exit__(None, None, None)
+                self._status_ctx = None
 
     async def on_tool_call(self, name: str, args: dict) -> bool:
         """工具调用 → 显示 + 确认"""
@@ -345,10 +368,11 @@ class AgentCallbacks:
 
     async def on_tool_result(self, name: str, output: str, success: bool, metadata: dict = None):
         """工具结果 → 显示"""
-        # 读类工具返回大量内容，不显示任何输出预览
+        # 读类工具静默处理：无论成功还是失败都不打印
+        # Agent 在探索文件结构时会尝试猜测路径，失败是正常探索过程，不需要打扰用户
         _READ_TOOLS = {"read_file", "search_code", "list_directory", "glob", "grep"}
-        if name in _READ_TOOLS and success:
-            return  # 读工具静默处理，不打印结果
+        if name in _READ_TOOLS:
+            return
 
         print_tool_result(name, success, output)
 
@@ -428,6 +452,14 @@ class StreamJSONCallbacks:
         self._emit({
             "type": "compression",
             "info": info,
+        })
+
+    async def on_status(self, action: str, message: str):
+        """状态变化事件（思考中/执行中/压缩中...）"""
+        self._emit({
+            "type": "status",
+            "action": action,  # start / end
+            "message": message,
         })
 
     def emit_result(self, response: str, agent) -> None:
@@ -562,6 +594,7 @@ async def run_print_mode(agent: AgentLoop, command: str, output_format: str, cal
         agent.on_tool_result = json_callbacks.on_tool_result
         agent.on_thinking = json_callbacks.on_thinking
         agent.on_compression = json_callbacks.on_compression
+        agent.on_status = json_callbacks.on_status
 
         try:
             response = await agent.run(command)
@@ -678,6 +711,7 @@ def initialize(args):
         on_text_chunk=callbacks.on_text_chunk,
         on_tool_call=callbacks.on_tool_call,
         on_tool_result=callbacks.on_tool_result,
+        on_status=callbacks.on_status,
         safe_mode=args.safe_mode,
         permission_mode=args.permission_mode,
         session_name=args.name,

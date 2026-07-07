@@ -5,6 +5,7 @@ Rich Console 封装 — Markdown 渲染、面板、颜色主题。
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.status import Status
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
@@ -213,6 +214,9 @@ def print_tools_list():
 
 def print_tool_call(name: str, args: dict):
     """打印工具调用信息"""
+    # 写工具的大内容参数脱敏：不打印文件正文，仅显示规模，避免刷屏
+    args = _redact_tool_args(name, args)
+
     style_manager = _get_style_manager()
     if style_manager is not None:
         formatted = style_manager.format_tool_call(name, args)
@@ -228,6 +232,24 @@ def print_tool_call(name: str, args: dict):
         border_style="yellow",
     )
     console.print(panel)
+
+
+# 写类工具中需要脱敏的大内容字段
+_CONTENT_FIELDS = {"content", "old_string", "new_string", "notebook_json"}
+
+
+def _redact_tool_args(name: str, args: dict) -> dict:
+    """对写工具的大内容参数脱敏，替换为规模摘要，保留 file_path 等元信息用于进度追踪"""
+    if name not in ("write_file", "edit_file", "write_notebook"):
+        return args
+    redacted = {}
+    for k, v in args.items():
+        if k in _CONTENT_FIELDS and isinstance(v, str):
+            lines = v.count("\n") + (1 if v else 0)
+            redacted[k] = f"<{lines} 行, {len(v)} 字符>"
+        else:
+            redacted[k] = v
+    return redacted
 
 
 def print_tool_result(name: str, success: bool, output_preview: str):
@@ -285,6 +307,23 @@ def print_approval_request(command: str, reason: str):
 def print_error(message: str):
     """打印错误信息"""
     console.print(f"[red]✗ {message}[/red]")
+
+
+# ============================================================
+# 状态指示器 — 长时间等待时显示 spinner（参考 Claude Code）
+# 用法：
+#   with status_spinner("思考中..."):
+#       do_long_work()
+# ============================================================
+
+def status_spinner(message: str, spinner: str = "dots"):
+    """返回一个 Status 上下文管理器，用于显示长时间操作的进度"""
+    return console.status(f"[cyan]{message}[/cyan]", spinner=spinner)
+
+
+def print_step(message: str):
+    """打印步骤提示（无 spinner，仅一行）"""
+    console.print(f"[dim]→ {message}[/dim]")
 
 
 def print_info(message: str):
@@ -431,9 +470,15 @@ def print_diff_preview(file_path: str, diff_text: str, is_new_file: bool = False
 
     console.print()
     console.print(header)
-    console.print()
 
-    # 渲染带颜色的 diff
+    # 新建文件不打印 diff 内容体（整个文件都是新增，会刷屏），仅显示进度标题
+    if is_new_file:
+        console.print(f"[dim]  已创建，共 {changes['added']} 行[/dim]")
+        console.print()
+        return
+
+    console.print()
+    # 渲染带颜色的 diff（仅对编辑场景，展示局部修改）
     formatted = format_diff_for_display(diff_text)
     if formatted:
         console.print(formatted)

@@ -53,7 +53,7 @@ notebook = [
 ]
 # 文件监听（配置热重载）
 watch = [
-    "watchdog>=4.0.0,<5.0.0",
+    "watchdog>=4.0.0,<7.0.0",
 ]
 # MCP 协议支持（SSE 传输）
 mcp = [
@@ -71,7 +71,7 @@ all = [
     "beautifulsoup4>=4.12.0,<5.0.0",
     "lxml>=5.0.0,<6.0.0",
     "nbformat>=5.9.0,<6.0.0",
-    "watchdog>=4.0.0,<5.0.0",
+    "watchdog>=4.0.0,<7.0.0",
     "fastapi>=0.110.0,<1.0.0",
     "uvicorn[standard]>=0.27.0,<1.0.0",
     "python-multipart>=0.0.9,<1.0.0",
